@@ -4,42 +4,48 @@ from streamlit_gsheets import GSheetsConnection
 import requests
 from datetime import datetime
 
-# 1. SEITEN KONFIGURATION (Muss ganz oben stehen!)
-st.set_page_config(page_title="Polymarket Tracker", layout="wide")
+# 1. SETUP
+st.set_page_config(page_title="Polymarket Whale Tracker", layout="wide")
+st.title("🐳 Polymarket High-Stakes Tracker")
+st.markdown("---")
 
-st.title("🚀 Polymarket Whale Tracker")
-
-# 2. VERBINDUNG
+# Verbindung zu Google Sheets
 try:
     conn = st.connection("gsheets", type=GSheetsConnection, ttl=0)
 except Exception as e:
-    st.error(f"Verbindungsfehler zum Sheet: {e}")
+    st.error(f"Verbindung zum Sheet fehlgeschlagen: {e}")
 
-# 3. DATEN-FUNKTION
-def fetch_gamma_data():
-    url = "https://gamma-api.polymarket.com/events?limit=50&active=true"
+# 2. WHALE-LOGIK (Activity API)
+def fetch_whale_trades():
+    # Wir ziehen die letzten 100 Aktivitäten weltweit
+    url = "https://gamma-api.polymarket.com/activity?limit=100"
     headers = {'User-Agent': 'Mozilla/5.0'}
+    
     try:
         response = requests.get(url, headers=headers, timeout=10)
         if response.status_code == 200:
-            events = response.json()
+            activities = response.json()
             data_list = []
-            for e in events:
-                # Wir prüfen flexibel auf Volumen-Felder
-                vol = e.get('volume24hr') or e.get('volume') or 0
+            for a in activities:
+                # Echter USD-Wert = Shares * Preis pro Share
+                size = float(a.get('size', 0))
+                price = float(a.get('price', 0))
+                usd_value = size * price
                 
-                data_list.append({
-                    "Zeit": datetime.now().strftime("%H:%M:%S"),
-                    "Name": str(e.get('title', e.get('question', 'Unbekannt')))[:40],
-                    "Betrag": round(float(vol), 2),
-                    "ID": str(e.get('id', 'N/A'))
-                })
+                # DER FILTER: Nur Trades ab 10.000 USD
+                if usd_value >= 10000:
+                    data_list.append({
+                        "Zeit": datetime.now().strftime("%H:%M:%S"),
+                        "Name": a.get('title', 'Unbekannter Markt')[:50],
+                        "Betrag": round(usd_value, 2),
+                        "ID": str(a.get('id', 'N/A'))
+                    })
             return pd.DataFrame(data_list)
     except Exception as e:
-        st.warning(f"API temporär nicht erreichbar: {e}")
+        st.warning(f"API Scan fehlgeschlagen: {e}")
     return pd.DataFrame()
 
-# 4. DATEN LADEN
+# 3. DATEN-VERARBEITUNG
 try:
     existing_data = conn.read(worksheet="Trades", ttl=0)
     if existing_data is None or existing_data.empty:
@@ -47,31 +53,37 @@ try:
 except:
     existing_data = pd.DataFrame(columns=["Zeit", "Name", "Betrag", "ID"])
 
-# 5. BUTTON & LOGIK
-if st.button('🚀 Scan & Archivieren'):
-    with st.spinner('Suche Daten...'):
-        new_data = fetch_gamma_data()
+if st.button('🔍 Nach Walen scannen'):
+    with st.spinner('Scanne Activity-Feed...'):
+        new_whales = fetch_whale_trades()
         
-    if not new_data.empty:
-        # ID-Check gegen Duplikate
+    if not new_whales.empty:
+        # Duplikate filtern
         existing_ids = existing_data['ID'].astype(str).unique()
-        new_unique = new_data[~new_data['ID'].astype(str).isin(existing_ids)]
+        unique_whales = new_whales[~new_whales['ID'].astype(str).isin(existing_ids)]
 
-        if not new_unique.empty:
-            updated_df = pd.concat([existing_data, new_unique], ignore_index=True)
+        if not unique_whales.empty:
+            updated_df = pd.concat([existing_data, unique_whales], ignore_index=True)
             conn.update(worksheet="Trades", data=updated_df)
-            st.success(f"✅ {len(new_unique)} neue Einträge gespeichert!")
+            st.success(f"🚨 WAL-ALARM: {len(unique_whales)} neue Groß-Trades gefunden!")
             st.rerun()
         else:
-            st.info("Keine neuen Daten gefunden.")
+            st.info("Keine neuen Wale seit dem letzten Scan gesichtet.")
+    else:
+        st.write("Aktuell keine Trades über 10.000 USD im Feed.")
 
-# 6. DASHBOARD
+# 4. DAS NEUE DASHBOARD
 st.divider()
-cols = st.columns(4)
-titles = ["🐟 Fish", "🐬 Dolphin", "🐳 Whale", "🚨 Megalodon"]
-limits = [(0, 10000), (10000, 100000), (100000, 500000), (500000, None)]
+c1, c2, c3 = st.columns(3)
 
-for col, title, (low, high) in zip(cols, titles, limits):
+# Wir definieren nur noch drei relevante Kategorien
+categories = [
+    (c1, "🐬 Dolphins", 10000, 50000),    # 10k - 50k
+    (c2, "🐳 Whales", 50000, 200000),      # 50k - 200k
+    (c3, "🚨 Megalodons", 200000, None)    # Alles über 200k
+]
+
+for col, title, low, high in categories:
     with col:
         st.subheader(title)
         if not existing_data.empty:
@@ -81,7 +93,10 @@ for col, title, (low, high) in zip(cols, titles, limits):
                 mask = (existing_data['Betrag'] >= low)
             
             df_cat = existing_data[mask]
-            st.dataframe(df_cat.sort_values(by="Zeit", ascending=False), 
-                         use_container_width=True, hide_index=True)
+            if not df_cat.empty:
+                st.dataframe(df_cat.sort_values(by="Betrag", ascending=False), 
+                             use_container_width=True, hide_index=True)
+            else:
+                st.write("Warte auf Daten...")
         else:
             st.write("Keine Daten")
