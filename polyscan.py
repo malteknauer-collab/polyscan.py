@@ -78,9 +78,9 @@ c1, c2, c3 = st.columns(3)
 
 # Wir definieren nur noch drei relevante Kategorien
 categories = [
-    (c1, "🐬 Dolphins", 10000, 50000),    # 10k - 50k
-    (c2, "🐳 Whales", 50000, 200000),      # 50k - 200k
-    (c3, "🚨 Megalodons", 200000, None)    # Alles über 200k
+    (c1, "🐬 Dolphins", "> $10k", 10000, 50000),
+    (c2, "🐳 Whales", "> $50k", 50000, 200000),
+    (c3, "🚨 Megalodons", "> $200k", 200000, None)
 ]
 
 for col, title, low, high in categories:
