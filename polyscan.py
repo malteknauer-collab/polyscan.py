@@ -11,7 +11,7 @@ st.title("🔍 API & Data Diagnose")
 conn = st.connection("gsheets", type=GSheetsConnection, ttl=0)
 
 def fetch_diagnostics():
-    url = "https://clob.polymarket.com/trades?limit=100"
+    url = "https://gamma-api.polymarket.com/events?limit=20&active=true"
     # User-Agent hilft gegen Blockaden
     headers = {'User-Agent': 'Mozilla/5.0'}
     
