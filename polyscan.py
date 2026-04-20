@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 from datetime import datetime
 
-st.set_page_config(page_title="Polymarket Whale Tracker", layout="wide")
+st.set_page_config(page_title="Polymarket Whale Monitor", layout="wide")
 st.title("🐳 Polymarket Whale Monitor")
 
 def get_market_name(token_id):
@@ -37,32 +37,48 @@ def fetch_data():
         return pd.DataFrame()
     return pd.DataFrame()
 
+# --- DASHBOARD STRUKTUR ---
 if st.button('🚀 Scan starten / Aktualisieren'):
     df = fetch_data()
     
+    # Erstelle die Spalten IMMER
+    col1, col2, col3 = st.columns(3)
+    
+    # Daten filtern (auch wenn df leer ist, funktionieren diese Filter)
     if not df.empty:
-        # Aufteilung in 3 Kategorien
         t10 = df[(df['Betrag'] >= 10000) & (df['Betrag'] < 100000)]
         t100 = df[(df['Betrag'] >= 100000) & (df['Betrag'] < 500000)]
         t500 = df[df['Betrag'] >= 500000]
-
-        # Spalten-Layout in Streamlit
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            st.subheader("🐳 > $10k")
-            st.dataframe(t10[['Zeit', 'Name', 'Betrag', 'ID']], use_container_width=True, hide_index=True)
-
-        with col2:
-            st.subheader("🐋 > $100k")
-            st.dataframe(t100[['Zeit', 'Name', 'Betrag', 'ID']], use_container_width=True, hide_index=True)
-
-        with col3:
-            st.subheader("🚨 > $500k")
-            # Hier machen wir den Hintergrund rot, wenn was drin ist
-            if not t500.empty:
-                st.dataframe(t500[['Zeit', 'Name', 'Betrag', 'ID']], use_container_width=True, hide_index=True)
-            else:
-                st.write("Keine Megalodons gesichtet.")
     else:
-        st.warning("Aktuell keine Trades über $10k in den letzten API-Daten gefunden.")
+        t10 = t100 = t500 = pd.DataFrame(columns=['Zeit', 'Name', 'Betrag', 'ID'])
+
+    # Spalte 1: Whales
+    with col1:
+        st.subheader("🐳 Whales (> $10k)")
+        if not t10.empty:
+            st.dataframe(t10, use_container_width=True, hide_index=True)
+        else:
+            st.info("Keine Trades in dieser Klasse.")
+
+    # Spalte 2: Kraken
+    with col2:
+        st.subheader("🐋 Kraken (> $100k)")
+        if not t100.empty:
+            st.dataframe(t100, use_container_width=True, hide_index=True)
+        else:
+            st.info("Keine Trades in dieser Klasse.")
+
+    # Spalte 3: Megalodons
+    with col3:
+        st.subheader("🚨 Megalodons (> $500k)")
+        if not t500.empty:
+            # Roter Style für die ganz dicken Fische
+            st.dataframe(t500.style.background_gradient(cmap='Reds'), use_container_width=True, hide_index=True)
+        else:
+            st.info("Keine Trades in dieser Klasse.")
+            
+    if df.empty:
+        st.divider()
+        st.caption("Letzter Scan ergab keine Treffer über $10k. Die API liefert nur die aktuellsten Trades der Plattform.")
+else:
+    st.info("Klicke auf den Button, um den Monitor zu aktivieren.")
