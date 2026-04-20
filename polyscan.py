@@ -4,7 +4,7 @@ import requests
 from datetime import datetime
 
 st.set_page_config(page_title="Polymarket Whale Monitor", layout="wide")
-st.title("🐳 Polymarket Whale Monitor")
+st.title("🐳 Polymarket Megalodon Monitor")
 
 def get_market_name(token_id):
     try:
@@ -54,7 +54,7 @@ if st.button('🚀 Scan starten / Aktualisieren'):
 
     # Spalte 1: Whales
     with col1:
-        st.subheader("🐳 Whales (> $10k)")
+        st.subheader("🐬 Dolphins (> $10k)")
         if not t10.empty:
             st.dataframe(t10, use_container_width=True, hide_index=True)
         else:
@@ -62,7 +62,7 @@ if st.button('🚀 Scan starten / Aktualisieren'):
 
     # Spalte 2: Kraken
     with col2:
-        st.subheader("🐋 Kraken (> $100k)")
+        st.subheader("🐋 Whales (> $100k)")
         if not t100.empty:
             st.dataframe(t100, use_container_width=True, hide_index=True)
         else:
