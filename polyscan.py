@@ -17,22 +17,20 @@ except Exception as e:
 
 # 2. WHALE-LOGIK (Activity API)
 def fetch_whale_trades():
-    # Wir ziehen die letzten 100 Aktivitäten weltweit
     url = "https://gamma-api.polymarket.com/activity?limit=100"
     headers = {'User-Agent': 'Mozilla/5.0'}
-    
     try:
         response = requests.get(url, headers=headers, timeout=10)
         if response.status_code == 200:
             activities = response.json()
             data_list = []
             for a in activities:
-                # Echter USD-Wert = Shares * Preis pro Share
+                # Echter USD-Wert = Shares * Preis
                 size = float(a.get('size', 0))
                 price = float(a.get('price', 0))
                 usd_value = size * price
                 
-                # DER FILTER: Nur Trades ab 10.000 USD
+                # DER FILTER: Nur Trades ab 10k
                 if usd_value >= 10000:
                     data_list.append({
                         "Zeit": datetime.now().strftime("%H:%M:%S"),
@@ -58,7 +56,6 @@ if st.button('🔍 Nach Walen scannen'):
         new_whales = fetch_whale_trades()
         
     if not new_whales.empty:
-        # Duplikate filtern
         existing_ids = existing_data['ID'].astype(str).unique()
         unique_whales = new_whales[~new_whales['ID'].astype(str).isin(existing_ids)]
 
@@ -68,35 +65,43 @@ if st.button('🔍 Nach Walen scannen'):
             st.success(f"🚨 WAL-ALARM: {len(unique_whales)} neue Groß-Trades gefunden!")
             st.rerun()
         else:
-            st.info("Keine neuen Wale seit dem letzten Scan gesichtet.")
-    else:
-        st.write("Aktuell keine Trades über 10.000 USD im Feed.")
+            st.info("Keine neuen Wale gesichtet.")
 
-# 4. DAS NEUE DASHBOARD
+# 4. DAS DASHBOARD MIT k-ABKÜRZUNGEN
 st.divider()
 c1, c2, c3 = st.columns(3)
 
-# Wir definieren nur noch drei relevante Kategorien
+# Deine Logik mit den sauberen 10k/50k Überschriften
 categories = [
-    (c1, "🐬 Dolphins", "> $10k", 10000, 50000),
-    (c2, "🐳 Whales", "> $50k", 50000, 200000),
-    (c3, "🚨 Megalodons", "> $200k", 200000, None)
+    (c1, "🐬 Dolphins", "10k - 50k", 10000, 50000),
+    (c2, "🐳 Whales", "50k - 200k", 50000, 200000),
+    (c3, "🚨 Megalodons", "> 200k", 200000, None)
 ]
 
-for col, title, low, high in categories:
+for col, title, subtitle, low, high in categories:
     with col:
         st.subheader(title)
+        st.caption(f"Limit: {subtitle}")
+        
         if not existing_data.empty:
             if high:
                 mask = (existing_data['Betrag'] >= low) & (existing_data['Betrag'] < high)
             else:
                 mask = (existing_data['Betrag'] >= low)
             
-            df_cat = existing_data[mask]
+            df_cat = existing_data[mask].copy()
+            
             if not df_cat.empty:
-                st.dataframe(df_cat.sort_values(by="Betrag", ascending=False), 
-                             use_container_width=True, hide_index=True)
+                df_cat = df_cat.sort_values(by="Betrag", ascending=False)
+                # Schöne Darstellung für die Tabelle
+                df_cat['Anzeige_Betrag'] = df_cat['Betrag'].map('{:,.2f} $'.format)
+                
+                st.dataframe(
+                    df_cat[['Zeit', 'Name', 'Anzeige_Betrag']], 
+                    use_container_width=True, 
+                    hide_index=True
+                )
             else:
-                st.write("Warte auf Daten...")
+                st.info("Keine Einträge.")
         else:
-            st.write("Keine Daten")
+            st.write("Warte auf Scan...")
