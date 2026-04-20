@@ -8,7 +8,7 @@ st.set_page_config(page_title="Polymarket Tracker", layout="wide")
 st.title("🐳 Polymarket Whale & Fish Tracker")
 
 # Verbindung zu Google Sheets
-conn = st.connection("gsheets", type=GSheetsConnection, ttl=0))
+conn = st.connection("gsheets", type=GSheetsConnection, ttl=0)
 
 def get_market_name(token_id):
     try:
