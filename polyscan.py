@@ -33,7 +33,7 @@ def fetch_whale_trades():
                 # DER FILTER: Nur Trades ab 10k
                 if usd_value >= 10000:
                     data_list.append({
-                        "Zeit": datetime.now().strftime("%H:%M:%S"),
+                        "Zeit": datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
                         "Name": a.get('title', 'Unbekannter Markt')[:50],
                         "Betrag": round(usd_value, 2),
                         "ID": str(a.get('id', 'N/A'))
@@ -56,6 +56,7 @@ if st.button('🔍 Nach Walen scannen'):
         new_whales = fetch_whale_trades()
         
     if not new_whales.empty:
+        # Sicherstellen, dass ID als String verglichen wird
         existing_ids = existing_data['ID'].astype(str).unique()
         unique_whales = new_whales[~new_whales['ID'].astype(str).isin(existing_ids)]
 
@@ -67,11 +68,10 @@ if st.button('🔍 Nach Walen scannen'):
         else:
             st.info("Keine neuen Wale gesichtet.")
 
-# 4. DAS DASHBOARD MIT k-ABKÜRZUNGEN
+# 4. DAS DASHBOARD
 st.divider()
 c1, c2, c3 = st.columns(3)
 
-# Deine Logik mit den sauberen 10k/50k Überschriften
 categories = [
     (c1, "🐬 Dolphins", "10k - 50k", 10000, 50000),
     (c2, "🐳 Whales", "50k - 200k", 50000, 200000),
@@ -84,24 +84,25 @@ for col, title, subtitle, low, high in categories:
         st.caption(f"Limit: {subtitle}")
         
         if not existing_data.empty:
+            # Filtern nach Betrag
             if high:
-                mask = (existing_data['Betrag'] >= low) & (existing_data['Betrag'] < high)
+                mask = (existing_data['Betrag'].astype(float) >= low) & (existing_data['Betrag'].astype(float) < high)
             else:
-                mask = (existing_data['Betrag'] >= low)
+                mask = (existing_data['Betrag'].astype(float) >= low)
             
             df_cat = existing_data[mask].copy()
             
             if not df_cat.empty:
+                # Sortieren: Neueste zuerst (oder nach Betrag, falls gewünscht)
                 df_cat = df_cat.sort_values(by="Betrag", ascending=False)
-                # Schöne Darstellung für die Tabelle
-                df_cat['Anzeige_Betrag'] = df_cat['Betrag'].map('{:,.2f} $'.format)
+                
+                # Formatierung für die Tabelle
+                df_cat['USD'] = df_cat['Betrag'].map('{:,.2f} $'.format)
                 
                 st.dataframe(
-                    df_cat[['Zeit', 'Name', 'Anzeige_Betrag']], 
+                    df_cat[['Zeit', 'Name', 'USD']], 
                     use_container_width=True, 
                     hide_index=True
                 )
             else:
                 st.info("Keine Einträge.")
-        else:
-            st.write("Warte auf Scan...")
