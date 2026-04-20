@@ -4,91 +4,74 @@ from streamlit_gsheets import GSheetsConnection
 import requests
 from datetime import datetime
 
-# --- SEITEN KONFIGURATION ---
-st.set_page_config(page_title="Polymarket Tracker", layout="wide")
-st.title("🚀 Polymarket Whale & Fish Tracker")
+st.set_page_config(page_title="Polymarket Diagnostics", layout="wide")
+st.title("🔍 API & Data Diagnose")
 
-# Verbindung zu Google Sheets (ohne Cache)
+# Verbindung zu Google Sheets
 conn = st.connection("gsheets", type=GSheetsConnection, ttl=0)
 
-# --- FUNKTION: DATEN VON POLYMARKET HOLEN ---
-def fetch_current_trades():
+def fetch_diagnostics():
     url = "https://clob.polymarket.com/last-trades"
+    # User-Agent hilft gegen Blockaden
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    
     try:
-        response = requests.get(url)
+        response = requests.get(url, headers=headers)
         if response.status_code == 200:
             trades = response.json()
-            data_list = []
-            for t in trades:
-                # Wir rechnen die Größe aus (Preis * Menge)
-                val = float(t.get('price', 0)) * float(t.get('size', 0))
+            
+            # --- DIAGNOSE BOXEN ---
+            st.subheader("📡 API Antwort")
+            col1, col2 = st.columns(2)
+            col1.metric("Anzahl Trades von API", len(trades))
+            col2.info("Status: Verbindung erfolgreich (200)")
+
+            if len(trades) > 0:
+                with st.expander("Rohdaten des ersten Trades ansehen"):
+                    st.json(trades[0]) # Hier sehen wir die Feldnamen!
                 
-                # TEST-LIMIT: Ab 10$ (später wieder auf 1000 ändern)
-                if val >= 0.1:
+                data_list = []
+                for t in trades:
+                    # Wir versuchen verschiedene Feldnamen, falls die API sie geändert hat
+                    p = float(t.get('price', t.get('p', 0)))
+                    s = float(t.get('size', t.get('qty', 0)))
+                    val = p * s
+                    
                     data_list.append({
                         "Zeit": datetime.now().strftime("%H:%M:%S"),
-                        "Name": t.get('asset_id', 'Unbekannt')[:15], # Gekürzt für Übersicht
+                        "Name": t.get('asset_id', t.get('token_id', 'Unbekannt'))[:15],
                         "Betrag": round(val, 2),
-                        "ID": t.get('order_id', 'N/A')
+                        "ID": t.get('order_id', t.get('id', 'N/A'))
                     })
-            return pd.DataFrame(data_list)
+                return pd.DataFrame(data_list)
+            else:
+                st.warning("Die API hat eine leere Liste geschickt.")
+        else:
+            st.error(f"API Fehler: Status {response.status_code}")
     except Exception as e:
-        st.error(f"API Fehler: {e}")
+        st.error(f"Kritischer Fehler: {e}")
     return pd.DataFrame()
 
-# --- HAUPTLOGIK: LESEN & SCHREIBEN ---
-# Bestehende Daten aus dem Sheet laden
-try:
-    existing_data = conn.read(worksheet="Trades", ttl=0)
-except:
-    existing_data = pd.DataFrame(columns=["Zeit", "Name", "Betrag", "ID"])
-
-if st.button('🚀 Scan & Archivieren'):
-    with st.spinner('Suche nach Trades...'):
-        new_trades = fetch_current_trades()
+# --- HAUPTPROGRAMM ---
+if st.button('🧪 API-Check & Scan'):
+    df = fetch_diagnostics()
+    
+    if not df.empty:
+        st.subheader("Vorschau der verarbeiteten Daten")
+        st.dataframe(df.head(10)) # Zeigt die ersten 10 Zeilen
         
-    if not new_trades.empty:
+        # Test-Schreiben ins Google Sheet
         try:
-            # Nur echte Neuheiten filtern (ID-Check)
-            if not existing_data.empty:
-                existing_ids = existing_data['ID'].astype(str).tolist()
-                new_unique = new_trades[~new_trades['ID'].astype(str).isin(existing_ids)]
-            else:
-                new_unique = new_trades
-
-            if not new_unique.empty:
-                updated_df = pd.concat([existing_data, new_unique], ignore_index=True)
-                # Ab ins Google Sheet
-                conn.update(worksheet="Trades", data=updated_df)
-                st.success(f"✅ {len(new_unique)} neue Trades archiviert!")
-                existing_data = updated_df
-            else:
-                st.info("Keine neuen Trades seit dem letzten Scan.")
+            conn.update(worksheet="Trades", data=df)
+            st.success("✅ Test-Daten wurden ans Sheet gesendet!")
         except Exception as e:
-            st.error(f"❌ Google Fehler: {e}")
-    else:
-        st.warning("Momentan keine Trades über $10 gefunden.")
+            st.error(f"Google Sheet Schreibfehler: {e}")
 
-# --- DASHBOARD ANZEIGE ---
+# Zeige aktuelles Sheet an
 st.divider()
-c1, c2, c3, c4 = st.columns(4)
-
-with c1:
-    st.subheader("🐟 Fish")
-    df_fish = existing_data[(existing_data['Betrag'] >= 10) & (existing_data['Betrag'] < 10000)]
-    st.dataframe(df_fish.sort_values(by="Zeit", ascending=False), use_container_width=True, hide_index=True)
-
-with c2:
-    st.subheader("🐬 Dolphin")
-    df_dolphin = existing_data[(existing_data['Betrag'] >= 10000) & (existing_data['Betrag'] < 100000)]
-    st.dataframe(df_dolphin.sort_values(by="Zeit", ascending=False), use_container_width=True, hide_index=True)
-
-with c3:
-    st.subheader("🐳 Whale")
-    df_whale = existing_data[(existing_data['Betrag'] >= 100000) & (existing_data['Betrag'] < 500000)]
-    st.dataframe(df_whale.sort_values(by="Zeit", ascending=False), use_container_width=True, hide_index=True)
-
-with c4:
-    st.subheader("🚨 Megalodon")
-    df_mega = existing_data[existing_data['Betrag'] >= 500000]
-    st.dataframe(df_mega.sort_values(by="Zeit", ascending=False), use_container_width=True, hide_index=True)
+st.subheader("Aktueller Inhalt im Google Sheet")
+try:
+    current = conn.read(worksheet="Trades", ttl=0)
+    st.dataframe(current)
+except:
+    st.write("Sheet ist noch leer oder nicht erreichbar.")
