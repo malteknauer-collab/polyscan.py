@@ -17,7 +17,7 @@ except Exception as e:
 
 # 2. WHALE-LOGIK (Activity API)
 def fetch_whale_trades():
-    url = "https://gamma-api.polymarket.com/activity?limit=100"
+    url = "https://gamma-api.polymarket.com/activity?limit=1000"
     headers = {'User-Agent': 'Mozilla/5.0'}
     try:
         response = requests.get(url, headers=headers, timeout=10)
