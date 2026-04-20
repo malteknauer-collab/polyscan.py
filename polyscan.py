@@ -24,7 +24,7 @@ def fetch_current_trades():
                 val = float(t.get('price', 0)) * float(t.get('size', 0))
                 
                 # TEST-LIMIT: Ab 10$ (später wieder auf 1000 ändern)
-                if val True:
+                if val >= 0.1:
                     data_list.append({
                         "Zeit": datetime.now().strftime("%H:%M:%S"),
                         "Name": t.get('asset_id', 'Unbekannt')[:15], # Gekürzt für Übersicht
